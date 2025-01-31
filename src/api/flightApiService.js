@@ -77,7 +77,7 @@ const searchFlightsV2 = async (
   childrens = 0,
   infants = 0,
   sortBy = "best",
-  limit,
+  limit = 20,
   carriersIds,
   currency = "USD",
   market = "en-US",

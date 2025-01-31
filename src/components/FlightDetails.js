@@ -8,8 +8,24 @@ const FlightDetails = ({ flight, onClose }) => {
   useEffect(() => {
     const fetchDetails = async () => {
       try {
-        const response = await getFlightDetails(flight.id);
-        setDetails(response.data.data.itinerary);
+        const legs = flight.legs.map((leg) => ({
+          origin: leg.origin.displayCode,
+          destination: leg.destination.displayCode,
+          date: leg.departure.split("T")[0],
+        }));
+
+        const response = await getFlightDetails({
+          itineraryId: flight.id,
+          legs,
+          sessionId: flight.sessionId,
+          adults: 1,
+          currency: "USD",
+          locale: "en-US",
+          market: "en-US",
+          countryCode: "US",
+        });
+
+        setDetails(response.data.itinerary);
       } catch (error) {
         console.error("Error fetching flight details:", error);
         alert(
@@ -20,7 +36,7 @@ const FlightDetails = ({ flight, onClose }) => {
     };
 
     fetchDetails();
-  }, [flight.id]);
+  }, [flight]);
 
   if (loading) {
     return <p>Loading flight details...</p>;
@@ -31,40 +47,26 @@ const FlightDetails = ({ flight, onClose }) => {
   }
 
   const { legs, pricingOptions } = details;
-  const { origin, destination, departure, arrival, duration, segments } =
-    legs[0];
   const { totalPrice } = pricingOptions[0];
 
   return (
     <div className="mt-8">
       <h2 className="text-2xl font-bold mb-4">Flight Details</h2>
-      <p>
-        {origin.name} ({origin.displayCode}) to {destination.name} (
-        {destination.displayCode})
-      </p>
-      <p>Departure: {new Date(departure).toLocaleString()}</p>
-      <p>Arrival: {new Date(arrival).toLocaleString()}</p>
-      <p>Duration: {duration} minutes</p>
-      <p>Price: {totalPrice}</p>
-
-      <h3 className="text-xl font-bold mt-4 mb-2">Segments</h3>
-      {segments.map((segment) => (
-        <div key={segment.id} className="mb-4">
+      {legs.map((leg, index) => (
+        <div key={leg.id} className="mb-4">
+          <h3 className="text-xl font-bold">
+            {index === 0 ? "Outbound" : "Return"} Flight
+          </h3>
           <p>
-            {segment.origin.name} ({segment.origin.displayCode}) to{" "}
-            {segment.destination.name} ({segment.destination.displayCode})
+            {leg.origin.name} ({leg.origin.displayCode}) to{" "}
+            {leg.destination.name} ({leg.destination.displayCode})
           </p>
-          <p>Flight Number: {segment.flightNumber}</p>
-          <p>
-            {segment.marketingCarrier.name} (
-            {segment.marketingCarrier.displayCode})
-          </p>
-          <p>Departure: {new Date(segment.departure).toLocaleString()}</p>
-          <p>Arrival: {new Date(segment.arrival).toLocaleString()}</p>
-          <p>Duration: {segment.duration} minutes</p>
+          <p>Departure: {new Date(leg.departure).toLocaleString()}</p>
+          <p>Arrival: {new Date(leg.arrival).toLocaleString()}</p>
+          <p>Duration: {leg.duration} minutes</p>
         </div>
       ))}
-
+      <p>Total Price: {totalPrice}</p>
       <button
         className="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
         onClick={onClose}

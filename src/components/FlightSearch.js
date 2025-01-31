@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { searchFlightsV2 } from "../api/flightApiService";
+import { searchFlightsComplete } from "../api/flightApiService";
 import AirportSearch from "./AirportSearch/AirportSearch";
 import PriceCalendar from "./Calendar/PriceCalendar";
 import FlightResults from "./FlightResults/FlightResults";
@@ -175,7 +175,7 @@ const FlightSearch = () => {
     }
 
     try {
-      const response = await searchFlightsV2(
+      const response = await searchFlightsComplete(
         originAirportIds.skyId,
         destinationAirportIds.skyId,
         originAirportIds.entityId,
@@ -187,7 +187,7 @@ const FlightSearch = () => {
         children,
         infants,
         "best",
-        undefined,
+        10,
         undefined,
         "USD",
         "en-US",
@@ -195,8 +195,8 @@ const FlightSearch = () => {
       );
 
       console.log("API response:", response.data);
-      if (response.data && response.data.data) {
-        setSearchResults(response.data.data);
+      if (response.data) {
+        setSearchResults(response.data);
       } else {
         setSearchResults([]);
       }
@@ -209,7 +209,7 @@ const FlightSearch = () => {
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col justify-top">
       {/* Search Form */}
-      <div className="max-w-7xl mx-auto px-4 py-8 mt-10">
+      <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-6 shadow-xl">
           {/* Trip Type, Passengers, and Cabin Class */}
           <div className="flex items-center space-x-4 mb-6">
@@ -528,15 +528,15 @@ const FlightSearch = () => {
             </button>
           </div>
         </div>
-
-        {/* Flight Results */}
-        {searchResults && (
-          <FlightResults
-            results={searchResults}
-            onSelectFlight={(flight) => console.log("Selected flight:", flight)}
-          />
-        )}
       </div>
+
+      {/* Flight Results */}
+      {searchResults && (
+        <FlightResults
+          results={searchResults}
+          onSelectFlight={(flight) => console.log("Selected flight:", flight)}
+        />
+      )}
     </div>
   );
 };

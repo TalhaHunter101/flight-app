@@ -167,7 +167,7 @@ const PriceCalendar = ({
 
       days.push(
         <td
-          key={currentDate}
+          key={`day-${currentDate}-${day.getDate()}`}
           className={`p-2 text-center ${
             isDisabled
               ? "opacity-50 cursor-not-allowed"
@@ -283,9 +283,9 @@ const PriceCalendar = ({
             <table key={monthOffset} className="w-full">
               <thead>
                 <tr>
-                  {["S", "M", "T", "W", "T", "F", "S"].map((day) => (
+                  {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
                     <th
-                      key={day}
+                      key={`day-header-${index}-${day}`}
                       className="text-gray-400 font-normal p-2 text-center"
                     >
                       {day}
