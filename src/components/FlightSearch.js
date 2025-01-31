@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { searchAirport, searchFlightsComplete } from "../api/flightApiService";
 import AirportSearch from "./AirportSearch/AirportSearch";
+import PriceCalendar from "./Calendar/PriceCalendar";
 
 const FlightSearch = () => {
   const [tripType, setTripType] = useState("round-trip");
@@ -15,6 +16,22 @@ const FlightSearch = () => {
   const [isPassengerDropdownOpen, setIsPassengerDropdownOpen] = useState(false);
   const [flights, setFlights] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [originAirportIds, setOriginAirportIds] = useState(null);
+  const [destinationAirportIds, setDestinationAirportIds] = useState(null);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [multiCityFlights, setMultiCityFlights] = useState([
+    {
+      id: 1,
+      origin: "",
+      destination: "",
+      date: "",
+      originIds: null,
+      destinationIds: null,
+    },
+  ]);
+  const [isSelectingReturn, setIsSelectingReturn] = useState(false);
+  // eslint-disable-next-line no-unused-vars
+  const [currentEditingFlight, setCurrentEditingFlight] = useState(null);
 
   // Add useRef for dropdown click outside handling
   const dropdownRef = useRef(null);
@@ -54,11 +71,101 @@ const FlightSearch = () => {
     }
   };
 
-  const handleAirportSelect = (airport, type) => {
-    if (type === "origin") {
-      setOrigin(airport.suggestionTitle);
+  const handleAddFlight = () => {
+    const lastFlight = multiCityFlights[multiCityFlights.length - 1];
+    setMultiCityFlights([
+      ...multiCityFlights,
+      {
+        id: lastFlight.id + 1,
+        origin: lastFlight.destination,
+        destination: "",
+        date: "",
+        originIds: lastFlight.destinationIds,
+        destinationIds: null,
+      },
+    ]);
+  };
+
+  const handleRemoveFlight = (id) => {
+    if (multiCityFlights.length > 1) {
+      setMultiCityFlights(
+        multiCityFlights.filter((flight) => flight.id !== id)
+      );
+    }
+  };
+
+  const handleAirportSelect = (airport, type, index = 0) => {
+    if (tripType === "multi-city") {
+      const newFlights = [...multiCityFlights];
+      if (type === "origin") {
+        newFlights[index] = {
+          ...newFlights[index],
+          origin: airport.suggestionTitle,
+          originIds: {
+            skyId: airport.skyId,
+            entityId: airport.entityId,
+          },
+        };
+      } else {
+        newFlights[index] = {
+          ...newFlights[index],
+          destination: airport.suggestionTitle,
+          destinationIds: {
+            skyId: airport.skyId,
+            entityId: airport.entityId,
+          },
+        };
+        // Update next flight's origin if it exists
+        if (index + 1 < newFlights.length) {
+          newFlights[index + 1] = {
+            ...newFlights[index + 1],
+            origin: airport.suggestionTitle,
+            originIds: {
+              skyId: airport.skyId,
+              entityId: airport.entityId,
+            },
+          };
+        }
+      }
+      setMultiCityFlights(newFlights);
     } else {
-      setDestination(airport.suggestionTitle);
+      // Existing single/round-trip logic
+      if (type === "origin") {
+        setOrigin(airport.suggestionTitle);
+        setOriginAirportIds({
+          skyId: airport.skyId,
+          entityId: airport.entityId,
+        });
+      } else {
+        setDestination(airport.suggestionTitle);
+        setDestinationAirportIds({
+          skyId: airport.skyId,
+          entityId: airport.entityId,
+        });
+      }
+
+      // Show calendar when both airports are selected
+      if (
+        (type === "destination" && originAirportIds) ||
+        (type === "origin" && destinationAirportIds)
+      ) {
+        setShowCalendar(true);
+      }
+    }
+  };
+
+  const handleDateSelect = (date, isReturn = false) => {
+    if (!isReturn) {
+      setDepartureDate(date);
+      if (tripType === "round-trip") {
+        setIsSelectingReturn(true);
+      } else {
+        setShowCalendar(false);
+      }
+    } else {
+      setReturnDate(date);
+      setShowCalendar(false);
+      setIsSelectingReturn(false);
     }
   };
 
@@ -271,46 +378,142 @@ const FlightSearch = () => {
           </div>
 
           {/* Origin, Destination, and Dates */}
-          <div className="grid grid-cols-12 gap-4">
-            <div className="col-span-4">
-              <AirportSearch
-                placeholder="Where from?"
-                value={origin}
-                onChange={setOrigin}
-                type="origin"
-                onSelect={(airport) => handleAirportSelect(airport, "origin")}
-              />
-            </div>
-            <div className="col-span-4">
-              <AirportSearch
-                placeholder="Where to?"
-                value={destination}
-                onChange={setDestination}
-                type="destination"
-                onSelect={(airport) =>
-                  handleAirportSelect(airport, "destination")
-                }
-              />
-            </div>
-            <div className="col-span-4">
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="date"
-                  value={departureDate}
-                  onChange={(e) => setDepartureDate(e.target.value)}
-                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-md"
-                />
-                {tripType === "round-trip" && (
-                  <input
-                    type="date"
-                    value={returnDate}
-                    onChange={(e) => setReturnDate(e.target.value)}
-                    className="w-full bg-gray-700 text-white px-4 py-3 rounded-md"
-                  />
-                )}
+          {tripType === "multi-city" ? (
+            <div className="space-y-4 max-w-4xl mx-auto">
+              {multiCityFlights.map((flight, index) => (
+                <div
+                  key={flight.id}
+                  className="grid grid-cols-12 gap-4 relative"
+                >
+                  <div className="col-span-4">
+                    <AirportSearch
+                      placeholder="Where from?"
+                      value={flight.origin}
+                      onChange={(value) => {
+                        const newFlights = [...multiCityFlights];
+                        newFlights[index].origin = value;
+                        setMultiCityFlights(newFlights);
+                      }}
+                      type="origin"
+                      onSelect={(airport) =>
+                        handleAirportSelect(airport, "origin", index)
+                      }
+                    />
+                  </div>
+                  <div className="col-span-4">
+                    <AirportSearch
+                      placeholder="Where to?"
+                      value={flight.destination}
+                      onChange={(value) => {
+                        const newFlights = [...multiCityFlights];
+                        newFlights[index].destination = value;
+                        setMultiCityFlights(newFlights);
+                      }}
+                      type="destination"
+                      onSelect={(airport) =>
+                        handleAirportSelect(airport, "destination", index)
+                      }
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    <input
+                      type="text"
+                      value={flight.date}
+                      onClick={() => {
+                        setShowCalendar(true);
+                      }}
+                      readOnly
+                      placeholder="Select Date"
+                      className="w-full bg-gray-700 text-white px-4 py-3 rounded-md cursor-pointer"
+                    />
+                  </div>
+                  {index > 0 && (
+                    <div className="col-span-1 flex items-center justify-center">
+                      <button
+                        onClick={() => handleRemoveFlight(flight.id)}
+                        className="text-gray-400 hover:text-white"
+                      >
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div className="flex justify-center">
+                <button
+                  onClick={handleAddFlight}
+                  className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-md"
+                >
+                  + Add Flight
+                </button>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-12 gap-4 relative">
+              <div className="col-span-4">
+                <AirportSearch
+                  placeholder="Where from?"
+                  value={origin}
+                  onChange={setOrigin}
+                  type="origin"
+                  onSelect={(airport) => handleAirportSelect(airport, "origin")}
+                />
+              </div>
+              <div className="col-span-4">
+                <AirportSearch
+                  placeholder="Where to?"
+                  value={destination}
+                  onChange={setDestination}
+                  type="destination"
+                  onSelect={(airport) =>
+                    handleAirportSelect(airport, "destination")
+                  }
+                />
+              </div>
+              <div className="col-span-4 relative">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={departureDate}
+                      onClick={() => {
+                        setShowCalendar(true);
+                        setIsSelectingReturn(false);
+                      }}
+                      readOnly
+                      placeholder="Departure"
+                      className="w-full bg-gray-700 text-white px-4 py-3 rounded-md cursor-pointer"
+                    />
+                  </div>
+                  {tripType === "round-trip" && (
+                    <input
+                      type="text"
+                      value={returnDate}
+                      onClick={() => {
+                        setShowCalendar(true);
+                        setIsSelectingReturn(true);
+                      }}
+                      readOnly
+                      placeholder="Return"
+                      className="w-full bg-gray-700 text-white px-4 py-3 rounded-md cursor-pointer"
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Search Button */}
           <div className="flex justify-center mt-6">
@@ -357,6 +560,32 @@ const FlightSearch = () => {
           )
         )}
       </div>
+      {showCalendar && originAirportIds && destinationAirportIds && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40"
+          onClick={() => setShowCalendar(false)}
+        >
+          <div
+            className="absolute z-50"
+            style={{
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <PriceCalendar
+              originSkyId={originAirportIds.skyId}
+              destinationSkyId={destinationAirportIds.skyId}
+              selectedDate={departureDate}
+              returnDate={returnDate}
+              onDateSelect={handleDateSelect}
+              isSelectingReturn={isSelectingReturn}
+              tripType={tripType}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
