@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { getPriceCalendar } from "../../api/flightApiService";
 
 const PriceCalendar = ({
@@ -14,36 +14,82 @@ const PriceCalendar = ({
   const [loading, setLoading] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [hoverDate, setHoverDate] = useState(null);
+  const priceRequestTimeoutRef = useRef(null);
+  const priceCache = useRef(new Map()); // Cache for price data
+
+  useEffect(() => {
+    return () => {
+      if (priceRequestTimeoutRef.current) {
+        clearTimeout(priceRequestTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const getCacheKey = (originId, destId, fromDate, toDate) => {
+    return `${originId}-${destId}-${fromDate}-${toDate}`;
+  };
 
   useEffect(() => {
     const fetchPriceCalendar = async () => {
       if (!originSkyId || !destinationSkyId) return;
 
-      setLoading(true);
-      try {
-        const fromDate = new Date(
-          currentMonth.getFullYear(),
-          currentMonth.getMonth(),
-          1
-        );
-        const toDate = new Date(
-          currentMonth.getFullYear(),
-          currentMonth.getMonth() + 2,
-          0
-        );
+      const fromDate = new Date(
+        currentMonth.getFullYear(),
+        currentMonth.getMonth(),
+        1
+      );
+      const toDate = new Date(
+        currentMonth.getFullYear(),
+        currentMonth.getMonth() + 2,
+        0
+      );
 
-        const response = await getPriceCalendar(
-          originSkyId,
-          destinationSkyId,
-          fromDate.toISOString().split("T")[0],
-          toDate.toISOString().split("T")[0]
-        );
+      const fromDateStr = fromDate.toISOString().split("T")[0];
+      const toDateStr = toDate.toISOString().split("T")[0];
+      const cacheKey = getCacheKey(
+        originSkyId,
+        destinationSkyId,
+        fromDateStr,
+        toDateStr
+      );
 
-        setCalendarData(response.data.flights);
-      } catch (error) {
-        console.error("Error fetching price calendar:", error);
+      // Check if we have cached data
+      if (priceCache.current.has(cacheKey)) {
+        setCalendarData(priceCache.current.get(cacheKey));
+        return;
       }
-      setLoading(false);
+
+      // Clear any existing timeout
+      if (priceRequestTimeoutRef.current) {
+        clearTimeout(priceRequestTimeoutRef.current);
+      }
+
+      // Set a new timeout to delay the API call
+      priceRequestTimeoutRef.current = setTimeout(async () => {
+        setLoading(true);
+        try {
+          const response = await getPriceCalendar(
+            originSkyId,
+            destinationSkyId,
+            fromDateStr,
+            toDateStr
+          );
+
+          // Cache the results
+          priceCache.current.set(cacheKey, response.data.flights);
+
+          // Limit cache size
+          if (priceCache.current.size > 10) {
+            const firstKey = priceCache.current.keys().next().value;
+            priceCache.current.delete(firstKey);
+          }
+
+          setCalendarData(response.data.flights);
+        } catch (error) {
+          console.error("Error fetching price calendar:", error);
+        }
+        setLoading(false);
+      }, 1000);
     };
 
     fetchPriceCalendar();

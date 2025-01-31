@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
-import { searchAirport, searchFlightsComplete } from "../api/flightApiService";
+import { searchFlightsV2 } from "../api/flightApiService";
 import AirportSearch from "./AirportSearch/AirportSearch";
 import PriceCalendar from "./Calendar/PriceCalendar";
+import FlightResults from "./FlightResults/FlightResults";
+import CalendarIcon from "./CalendarIcon";
 
 const FlightSearch = () => {
   const [tripType, setTripType] = useState("round-trip");
@@ -14,8 +16,6 @@ const FlightSearch = () => {
   const [infants, setInfants] = useState(0);
   const [cabinClass, setCabinClass] = useState("Economy");
   const [isPassengerDropdownOpen, setIsPassengerDropdownOpen] = useState(false);
-  const [flights, setFlights] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [originAirportIds, setOriginAirportIds] = useState(null);
   const [destinationAirportIds, setDestinationAirportIds] = useState(null);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -30,8 +30,7 @@ const FlightSearch = () => {
     },
   ]);
   const [isSelectingReturn, setIsSelectingReturn] = useState(false);
-  // eslint-disable-next-line no-unused-vars
-  const [currentEditingFlight, setCurrentEditingFlight] = useState(null);
+  const [searchResults, setSearchResults] = useState(null);
 
   // Add useRef for dropdown click outside handling
   const dropdownRef = useRef(null);
@@ -169,61 +168,42 @@ const FlightSearch = () => {
     }
   };
 
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setFlights([]);
+  const handleSearch = async () => {
+    if (!originAirportIds || !destinationAirportIds || !departureDate) {
+      alert("Please select origin, destination, and departure date.");
+      return;
+    }
 
     try {
-      // First get airport entities for origin and destination
-      const [originData, destinationData] = await Promise.all([
-        searchAirport(origin),
-        searchAirport(destination),
-      ]);
-
-      // Extract required IDs from API response
-      const originAirport = originData.data[0].navigation.relevantFlightParams;
-      const destinationAirport =
-        destinationData.data[0].navigation.relevantFlightParams;
-
-      // Now search for flights
-      const flightResponse = await searchFlightsComplete(
-        originAirport.skyId,
-        destinationAirport.skyId,
-        originAirport.entityId,
-        destinationAirport.entityId,
+      const response = await searchFlightsV2(
+        originAirportIds.skyId,
+        destinationAirportIds.skyId,
+        originAirportIds.entityId,
+        destinationAirportIds.entityId,
         departureDate,
-        tripType === "round-trip" ? returnDate : null,
+        returnDate,
         cabinClass.toLowerCase(),
         adults,
         children,
-        infants
+        infants,
+        "best",
+        undefined,
+        undefined,
+        "USD",
+        "en-US",
+        "US"
       );
 
-      // Transform API response to match UI needs
-      const processedFlights = flightResponse.data.itineraries.map(
-        (itinerary) => ({
-          id: itinerary.id,
-          price: itinerary.price.raw,
-          airline: itinerary.legs[0].carriers.marketing[0].name,
-          flightNumber:
-            itinerary.legs[0].carriers.marketing[0].code +
-            itinerary.legs[0].carriers.marketing[0].number,
-          departureAirport: origin,
-          arrivalAirport: destination,
-          departureDate: new Date(itinerary.legs[0].departure).toLocaleString(),
-          arrivalDate: new Date(itinerary.legs[0].arrival).toLocaleString(),
-          duration: itinerary.legs[0].durationInMinutes + " mins",
-        })
-      );
-
-      setFlights(processedFlights);
+      console.log("API response:", response.data);
+      if (response.data && response.data.data) {
+        setSearchResults(response.data.data);
+      } else {
+        setSearchResults([]);
+      }
     } catch (error) {
-      console.error("Error fetching flights:", error);
-      // You might want to add error state handling here
+      console.error("Error searching flights:", error);
+      alert("An error occurred while searching for flights. Please try again.");
     }
-
-    setLoading(false);
   };
 
   return (
@@ -416,16 +396,21 @@ const FlightSearch = () => {
                     />
                   </div>
                   <div className="col-span-3">
-                    <input
-                      type="text"
-                      value={flight.date}
-                      onClick={() => {
-                        setShowCalendar(true);
-                      }}
-                      readOnly
-                      placeholder="Select Date"
-                      className="w-full bg-gray-700 text-white px-4 py-3 rounded-md cursor-pointer"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={flight.date}
+                        onClick={() => {
+                          setShowCalendar(true);
+                        }}
+                        readOnly
+                        placeholder="Select Date"
+                        className="w-full bg-gray-700 text-white px-4 py-3 rounded-md cursor-pointer"
+                      />
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                        <CalendarIcon />
+                      </div>
+                    </div>
                   </div>
                   {index > 0 && (
                     <div className="col-span-1 flex items-center justify-center">
@@ -487,30 +472,48 @@ const FlightSearch = () => {
                   <div className="relative">
                     <input
                       type="text"
+                      placeholder="Departure Date"
                       value={departureDate}
-                      onClick={() => {
-                        setShowCalendar(true);
-                        setIsSelectingReturn(false);
-                      }}
+                      onClick={() => setShowCalendar(true)}
                       readOnly
-                      placeholder="Departure"
                       className="w-full bg-gray-700 text-white px-4 py-3 rounded-md cursor-pointer"
                     />
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                      <CalendarIcon />
+                    </div>
                   </div>
                   {tripType === "round-trip" && (
-                    <input
-                      type="text"
-                      value={returnDate}
-                      onClick={() => {
-                        setShowCalendar(true);
-                        setIsSelectingReturn(true);
-                      }}
-                      readOnly
-                      placeholder="Return"
-                      className="w-full bg-gray-700 text-white px-4 py-3 rounded-md cursor-pointer"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Return Date"
+                        value={returnDate}
+                        onClick={() => {
+                          setShowCalendar(true);
+                          setIsSelectingReturn(true);
+                        }}
+                        readOnly
+                        className="w-full bg-gray-700 text-white px-4 py-3 rounded-md cursor-pointer"
+                      />
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                        <CalendarIcon />
+                      </div>
+                    </div>
                   )}
                 </div>
+                {showCalendar && (
+                  <div className="absolute top-full left-0 mt-2 z-50">
+                    <PriceCalendar
+                      originSkyId={originAirportIds.skyId}
+                      destinationSkyId={destinationAirportIds.skyId}
+                      selectedDate={departureDate}
+                      returnDate={returnDate}
+                      onDateSelect={handleDateSelect}
+                      isSelectingReturn={isSelectingReturn}
+                      tripType={tripType}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -527,65 +530,13 @@ const FlightSearch = () => {
         </div>
 
         {/* Flight Results */}
-        {loading ? (
-          <div className="text-center mt-8">
-            <div className="text-white">Loading flights...</div>
-          </div>
-        ) : (
-          flights.length > 0 && (
-            <div className="mt-8 space-y-4">
-              {flights.map((flight) => (
-                <div key={flight.id} className="bg-gray-800 rounded-lg p-6">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-lg font-bold">{flight.airline}</p>
-                      <p className="text-sm text-gray-400">
-                        {flight.flightNumber}
-                      </p>
-                    </div>
-                    <div className="text-lg font-bold">${flight.price}</div>
-                  </div>
-                  <div className="mt-4">
-                    <p>
-                      {flight.departureAirport} - {flight.arrivalAirport}
-                    </p>
-                    <p>
-                      {flight.departureDate} - {flight.arrivalDate}
-                    </p>
-                    <p>Duration: {flight.duration}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
+        {searchResults && (
+          <FlightResults
+            results={searchResults}
+            onSelectFlight={(flight) => console.log("Selected flight:", flight)}
+          />
         )}
       </div>
-      {showCalendar && originAirportIds && destinationAirportIds && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40"
-          onClick={() => setShowCalendar(false)}
-        >
-          <div
-            className="absolute z-50"
-            style={{
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <PriceCalendar
-              originSkyId={originAirportIds.skyId}
-              destinationSkyId={destinationAirportIds.skyId}
-              selectedDate={departureDate}
-              returnDate={returnDate}
-              onDateSelect={handleDateSelect}
-              isSelectingReturn={isSelectingReturn}
-              tripType={tripType}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 };
