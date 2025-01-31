@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import axios from "axios";
+import { searchAirport, searchFlightsComplete } from "../api/flightApiService";
+import AirportSearch from "./AirportSearch/AirportSearch";
 
 const FlightSearch = () => {
   const [tripType, setTripType] = useState("round-trip");
@@ -18,7 +19,7 @@ const FlightSearch = () => {
   // Add useRef for dropdown click outside handling
   const dropdownRef = useRef(null);
 
-  // Handle click outside to close dropdown
+  // Handle click outside to close passenger dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -53,32 +54,66 @@ const FlightSearch = () => {
     }
   };
 
+  const handleAirportSelect = (airport, type) => {
+    if (type === "origin") {
+      setOrigin(airport.suggestionTitle);
+    } else {
+      setDestination(airport.suggestionTitle);
+    }
+  };
+
   const handleSearch = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setFlights([]);
 
     try {
-      const response = await axios.get(
-        "https://apiheya-sky-scrapper.p.rapidapi.com/flights",
-        {
-          params: {
-            origin: origin,
-            destination: destination,
-            departureDate: departureDate,
-            returnDate: returnDate,
-            adults: adults + children + infants,
-            cabinClass: cabinClass,
-          },
-          headers: {
-            "x-rapidapi-host": "apiheya-sky-scrapper.p.rapidapi.com",
-            "x-rapidapi-key": process.env.REACT_APP_RAPIDAPI_KEY,
-          },
-        }
+      // First get airport entities for origin and destination
+      const [originData, destinationData] = await Promise.all([
+        searchAirport(origin),
+        searchAirport(destination),
+      ]);
+
+      // Extract required IDs from API response
+      const originAirport = originData.data[0].navigation.relevantFlightParams;
+      const destinationAirport =
+        destinationData.data[0].navigation.relevantFlightParams;
+
+      // Now search for flights
+      const flightResponse = await searchFlightsComplete(
+        originAirport.skyId,
+        destinationAirport.skyId,
+        originAirport.entityId,
+        destinationAirport.entityId,
+        departureDate,
+        tripType === "round-trip" ? returnDate : null,
+        cabinClass.toLowerCase(),
+        adults,
+        children,
+        infants
       );
 
-      setFlights(response.data.flights); // Adjust based on actual response structure
+      // Transform API response to match UI needs
+      const processedFlights = flightResponse.data.itineraries.map(
+        (itinerary) => ({
+          id: itinerary.id,
+          price: itinerary.price.raw,
+          airline: itinerary.legs[0].carriers.marketing[0].name,
+          flightNumber:
+            itinerary.legs[0].carriers.marketing[0].code +
+            itinerary.legs[0].carriers.marketing[0].number,
+          departureAirport: origin,
+          arrivalAirport: destination,
+          departureDate: new Date(itinerary.legs[0].departure).toLocaleString(),
+          arrivalDate: new Date(itinerary.legs[0].arrival).toLocaleString(),
+          duration: itinerary.legs[0].durationInMinutes + " mins",
+        })
+      );
+
+      setFlights(processedFlights);
     } catch (error) {
       console.error("Error fetching flights:", error);
+      // You might want to add error state handling here
     }
 
     setLoading(false);
@@ -228,30 +263,33 @@ const FlightSearch = () => {
               onChange={(e) => setCabinClass(e.target.value)}
               className="bg-gray-700 text-white px-4 py-2 rounded-md cursor-pointer"
             >
-              <option value="Economy">Economy</option>
-              <option value="Business">Business</option>
-              <option value="First">First</option>
+              <option value="economy">Economy</option>
+              <option value="premium_economy">Premium Economy</option>
+              <option value="business">Business</option>
+              <option value="first">First</option>
             </select>
           </div>
 
           {/* Origin, Destination, and Dates */}
           <div className="grid grid-cols-12 gap-4">
             <div className="col-span-4">
-              <input
-                type="text"
+              <AirportSearch
                 placeholder="Where from?"
                 value={origin}
-                onChange={(e) => setOrigin(e.target.value)}
-                className="w-full bg-gray-700 text-white px-4 py-3 rounded-md"
+                onChange={setOrigin}
+                type="origin"
+                onSelect={(airport) => handleAirportSelect(airport, "origin")}
               />
             </div>
             <div className="col-span-4">
-              <input
-                type="text"
+              <AirportSearch
                 placeholder="Where to?"
                 value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-                className="w-full bg-gray-700 text-white px-4 py-3 rounded-md"
+                onChange={setDestination}
+                type="destination"
+                onSelect={(airport) =>
+                  handleAirportSelect(airport, "destination")
+                }
               />
             </div>
             <div className="col-span-4">
