@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
-import { searchFlightsComplete } from "../api/flightApiService";
+import {
+  searchFlightsComplete,
+  searchFlightsMultiStops,
+} from "../api/flightApiService";
 import AirportSearch from "./AirportSearch/AirportSearch";
 import PriceCalendar from "./Calendar/PriceCalendar";
 import FlightResults from "./FlightResults/FlightResults";
@@ -34,6 +37,8 @@ const FlightSearch = () => {
   const [searchResults, setSearchResults] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [sortBy, setSortBy] = useState("best");
+  const [activeCalendarIndex, setActiveCalendarIndex] = useState(null);
+  const [visibleCalendars, setVisibleCalendars] = useState({});
 
   // Add useRef for dropdown click outside handling
   const dropdownRef = useRef(null);
@@ -157,17 +162,28 @@ const FlightSearch = () => {
   };
 
   const handleDateSelect = (date, isReturn = false) => {
-    if (!isReturn) {
-      setDepartureDate(date);
-      if (tripType === "round-trip") {
-        setIsSelectingReturn(true);
-      } else {
-        setShowCalendar(false);
-      }
+    if (tripType === "multi-city") {
+      const newFlights = [...multiCityFlights];
+      newFlights[activeCalendarIndex].date = date;
+      setMultiCityFlights(newFlights);
+      setVisibleCalendars((prev) => ({
+        ...prev,
+        [activeCalendarIndex]: false,
+      }));
+      setActiveCalendarIndex(null);
     } else {
-      setReturnDate(date);
-      setShowCalendar(false);
-      setIsSelectingReturn(false);
+      if (!isReturn) {
+        setDepartureDate(date);
+        if (tripType === "round-trip") {
+          setIsSelectingReturn(true);
+        } else {
+          setShowCalendar(false);
+        }
+      } else {
+        setReturnDate(date);
+        setShowCalendar(false);
+        setIsSelectingReturn(false);
+      }
     }
   };
 
@@ -194,7 +210,6 @@ const FlightSearch = () => {
   const handleSearch = async (customSortBy = sortBy) => {
     setIsLoading(true);
     try {
-      // Only allow these specific sort values
       const validSortValues = [
         "best",
         "price_high",
@@ -205,43 +220,96 @@ const FlightSearch = () => {
         "return_landing_time",
       ];
 
-      // Ensure we're using a valid sort value
       const sortParam = validSortValues.includes(customSortBy)
         ? customSortBy
         : "best";
 
-      console.log("Making API call with sort param:", sortParam);
+      let response;
 
-      const response = await searchFlightsComplete(
-        originAirportIds.skyId,
-        destinationAirportIds.skyId,
-        originAirportIds.entityId,
-        destinationAirportIds.entityId,
-        departureDate,
-        returnDate,
-        cabinClass.toLowerCase(),
-        adults,
-        children,
-        infants,
-        sortParam,
-        10,
-        undefined,
-        "USD",
-        "en-US",
-        "US"
-      );
+      if (tripType === "multi-city") {
+        // Format legs for multi-city search
+        const legs = multiCityFlights.map((flight) => ({
+          origin: flight.originIds.skyId,
+          originEntityId: flight.originIds.entityId,
+          destination: flight.destinationIds.skyId,
+          destinationEntityId: flight.destinationIds.entityId,
+          date: flight.date,
+        }));
 
-      console.log("API Response:", response);
-      console.log("Response Data:", response.data);
+        console.log("[Multi-city Search] Formatted legs:", legs);
 
-      if (response.data && response.data.itineraries) {
-        setSearchResults(response.data);
+        response = await searchFlightsMultiStops(
+          legs,
+          cabinClass.toLowerCase(),
+          adults,
+          children,
+          infants,
+          sortParam,
+          "USD",
+          "en-US",
+          "US"
+        );
+
+        console.log("[Multi-city Search] Raw API Response:", response);
+
+        if (response.status && response.data) {
+          const transformedResponse = {
+            itineraries: response.data.itineraries || [],
+            context: {
+              status: response.status ? "complete" : "incomplete",
+              totalResults: response.data.context?.totalResults || 0,
+              sessionId: response.sessionId, // Access sessionId from root level
+            },
+            filterStats: response.data.filterStats || {
+              carriers: [],
+              airports: [],
+              duration: {},
+              stopPrices: {},
+            },
+          };
+
+          console.log(
+            "[Multi-city Search] Transformed Response:",
+            transformedResponse
+          );
+          setSearchResults(transformedResponse);
+        } else {
+          console.log("[Multi-city Search] No valid results found");
+          setSearchResults(null);
+        }
       } else {
-        console.log("No itineraries found in response");
-        setSearchResults(null);
+        // Existing round-trip/one-way logic
+        response = await searchFlightsComplete(
+          originAirportIds.skyId,
+          destinationAirportIds.skyId,
+          originAirportIds.entityId,
+          destinationAirportIds.entityId,
+          departureDate,
+          returnDate,
+          cabinClass.toLowerCase(),
+          adults,
+          children,
+          infants,
+          sortParam,
+          10,
+          undefined,
+          "USD",
+          "en-US",
+          "US"
+        );
+
+        if (response.data && response.data.itineraries) {
+          setSearchResults(response.data);
+        } else {
+          console.log("No itineraries found in response");
+          setSearchResults(null);
+        }
       }
     } catch (error) {
       console.error("Error searching flights:", error);
+      if (error.response) {
+        console.error("Error response:", error.response.data); // Debug log
+      }
       alert("An error occurred while searching for flights. Please try again.");
       setSearchResults(null);
     } finally {
@@ -451,7 +519,17 @@ const FlightSearch = () => {
                         type="text"
                         value={flight.date}
                         onClick={() => {
-                          setShowCalendar(true);
+                          if (flight.originIds && flight.destinationIds) {
+                            setVisibleCalendars((prev) => ({
+                              ...prev,
+                              [index]: true,
+                            }));
+                            setActiveCalendarIndex(index);
+                          } else {
+                            alert(
+                              "Please select both origin and destination airports first"
+                            );
+                          }
                         }}
                         readOnly
                         placeholder="Select Date"
@@ -461,6 +539,29 @@ const FlightSearch = () => {
                         <CalendarIcon />
                       </div>
                     </div>
+                    {visibleCalendars[index] &&
+                      activeCalendarIndex === index &&
+                      flight.originIds &&
+                      flight.destinationIds && (
+                        <div className="absolute right-40 mt-2 z-50">
+                          <PriceCalendar
+                            originSkyId={flight.originIds.skyId}
+                            destinationSkyId={flight.destinationIds.skyId}
+                            selectedDate={flight.date}
+                            onDateSelect={(date) => {
+                              const newFlights = [...multiCityFlights];
+                              newFlights[index].date = date;
+                              setMultiCityFlights(newFlights);
+                              setVisibleCalendars((prev) => ({
+                                ...prev,
+                                [index]: false,
+                              }));
+                            }}
+                            isSelectingReturn={false}
+                            tripType="one-way"
+                          />
+                        </div>
+                      )}
                   </div>
                   {index > 0 && (
                     <div className="col-span-1 flex items-center justify-center">
@@ -486,7 +587,7 @@ const FlightSearch = () => {
                   )}
                 </div>
               ))}
-              <div className="flex justify-center">
+              <div className="flex justify-left">
                 <button
                   onClick={handleAddFlight}
                   className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-md"

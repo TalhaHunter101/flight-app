@@ -2,8 +2,6 @@ import React, { useState } from "react";
 import FlightDetails from "../FlightDetails";
 
 const FlightResults = ({ results, onSelectFlight, onSortChange }) => {
-  console.log("FlightResults received:", results);
-
   const [selectedFlight, setSelectedFlight] = useState(null);
   const [activeFilters, setActiveFilters] = useState({
     stops: "all", // all, direct, oneStop
@@ -11,15 +9,15 @@ const FlightResults = ({ results, onSelectFlight, onSortChange }) => {
     sortBy: "best",
   });
 
-  if (!results || !results.itineraries) {
-    console.log("No valid results data");
+  if (!results) {
     return <div className="text-white text-center mt-8">No flights found.</div>;
   }
 
   const { itineraries, filterStats } = results;
 
-  console.log("Itineraries:", itineraries);
-  console.log("FilterStats:", filterStats);
+  if (!itineraries || itineraries.length === 0) {
+    return <div className="text-white text-center mt-8">No flights found.</div>;
+  }
 
   // Get unique airlines from the results
   const airlines = filterStats.carriers;
@@ -48,8 +46,7 @@ const FlightResults = ({ results, onSelectFlight, onSortChange }) => {
   // Define sort options with exact API values
   const sortOptions = [
     { value: "best", label: "Best" },
-    { value: "price_low", label: "Lowest Price" },
-    { value: "price_high", label: "Highest Price" },
+    { value: "price_high", label: "Cheapest" },
     { value: "fastest", label: "Fastest" },
     { value: "outbound_take_off_time", label: "Outbound Take Off Time" },
     { value: "outbound_landing_time", label: "Outbound Landing Time" },

@@ -338,6 +338,18 @@ const searchFlightsMultiStops = async (
   market = "en-US",
   countryCode = "US"
 ) => {
+  console.log("[API] Multi-city search params:", {
+    legs,
+    cabinClass,
+    adults,
+    childrens,
+    infants,
+    sortBy,
+    currency,
+    market,
+    countryCode,
+  });
+
   const options = {
     method: "GET",
     url: "https://sky-scrapper.p.rapidapi.com/api/v1/flights/searchFlightsMultiStops",
@@ -359,10 +371,12 @@ const searchFlightsMultiStops = async (
   };
 
   try {
+    console.log("[API] Sending multi-city request with options:", options);
     const response = await axios.request(options);
+    console.log("[API] Multi-city raw response:", response.data);
     return response.data;
   } catch (error) {
-    console.error(error);
+    console.error("[API] Multi-city search error:", error);
     throw error;
   }
 };
