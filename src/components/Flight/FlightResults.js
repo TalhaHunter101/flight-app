@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import FlightDetails from "../FlightDetails";
+import FlightDetails from "./FlightDetails";
 
 const FlightResults = ({ results, onSelectFlight, onSortChange }) => {
   const [selectedFlight, setSelectedFlight] = useState(null);

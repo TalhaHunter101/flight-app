@@ -1,65 +1,51 @@
-import React, { useEffect, useState } from "react";
-import { getFlightDetails } from "../api/flightApiService";
-import LoadingSpinner from "./LoadingSpinner";
+import React, { useEffect, useState, useCallback } from "react";
+import { getFlightDetails } from "../../api/flightApiService";
+import LoadingSpinner from "../utils/LoadingSpinner";
 
 const FlightDetails = ({ flight, sessionId, onClose }) => {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchDetails = async () => {
-      try {
-        const legs = flight.legs.map((leg) => ({
-          origin: leg.origin.displayCode,
-          destination: leg.destination.displayCode,
-          date: leg.departure.split("T")[0],
-        }));
+  const fetchDetails = useCallback(async () => {
+    try {
+      const legs = flight.legs.map((leg) => ({
+        origin: leg.origin.displayCode,
+        destination: leg.destination.displayCode,
+        date: leg.departure.split("T")[0],
+      }));
 
-        // Use flight.sessionId if exists (after trimming); otherwise use the sessionId prop (trimmed)
-        const usedSessionId =
-          (flight.sessionId && flight.sessionId.trim()) ||
-          (sessionId && sessionId.trim()) ||
-          "";
+      const usedSessionId = flight.sessionId?.trim() || sessionId?.trim() || "";
 
-        console.log("Used sessionId:", usedSessionId);
-        if (!usedSessionId) {
-          alert("Session ID is missing. Cannot fetch flight details.");
-          setLoading(false);
-          return;
-        }
-
-        const response = await getFlightDetails({
-          itineraryId: flight.id,
-          legs,
-          sessionId: usedSessionId,
-          adults: 1,
-          currency: "USD",
-          locale: "en-US",
-          market: "en-US",
-          countryCode: "US",
-        });
-
-        // Log the entire response to check its structure
-        console.log("Flight details response:", JSON.stringify(response));
-
-        // Check if response.data and response.data.itinerary exist
-        if (response.data && response.data.itinerary) {
-          setDetails(response.data.itinerary);
-        } else {
-          console.error("Invalid response structure:", response);
-          alert("Failed to fetch flight details. Please try again.");
-        }
-      } catch (error) {
-        console.error("Error fetching flight details:", error);
-        alert(
-          "An error occurred while fetching flight details. Please try again."
-        );
+      if (!usedSessionId) {
+        throw new Error("Session ID is missing");
       }
-      setLoading(false);
-    };
 
-    fetchDetails();
+      const response = await getFlightDetails({
+        itineraryId: flight.id,
+        legs,
+        sessionId: usedSessionId,
+        adults: 1,
+        currency: "USD",
+        locale: "en-US",
+        market: "en-US",
+        countryCode: "US",
+      });
+
+      if (response.data?.itinerary) {
+        setDetails(response.data.itinerary);
+      } else {
+        throw new Error("Invalid response structure");
+      }
+    } catch (error) {
+      alert("Failed to fetch flight details. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }, [flight, sessionId]);
+
+  useEffect(() => {
+    fetchDetails();
+  }, [fetchDetails]);
 
   return (
     <div className="mt-4 pt-4 border-t border-gray-700">

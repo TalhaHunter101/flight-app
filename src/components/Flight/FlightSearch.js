@@ -2,12 +2,12 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   searchFlightsComplete,
   searchFlightsMultiStops,
-} from "../api/flightApiService";
-import AirportSearch from "./AirportSearch/AirportSearch";
-import PriceCalendar from "./Calendar/PriceCalendar";
-import FlightResults from "./FlightResults/FlightResults";
-import CalendarIcon from "./CalendarIcon";
-import LoadingSpinner from "./LoadingSpinner";
+} from "../../api/flightApiService";
+import AirportSearch from "../AirportSearch/AirportSearch";
+import PriceCalendar from "../Calendar/PriceCalendar";
+import FlightResults from "./FlightResults";
+import CalendarIcon from "../utils/CalendarIcon";
+import LoadingSpinner from "../utils/LoadingSpinner";
 
 const FlightSearch = () => {
   const [tripType, setTripType] = useState("round-trip");
@@ -223,11 +223,9 @@ const FlightSearch = () => {
       const sortParam = validSortValues.includes(customSortBy)
         ? customSortBy
         : "best";
-
       let response;
 
       if (tripType === "multi-city") {
-        // Format legs for multi-city search
         const legs = multiCityFlights.map((flight) => ({
           origin: flight.originIds.skyId,
           originEntityId: flight.originIds.entityId,
@@ -235,8 +233,6 @@ const FlightSearch = () => {
           destinationEntityId: flight.destinationIds.entityId,
           date: flight.date,
         }));
-
-        console.log("[Multi-city Search] Formatted legs:", legs);
 
         response = await searchFlightsMultiStops(
           legs,
@@ -250,15 +246,13 @@ const FlightSearch = () => {
           "US"
         );
 
-        console.log("[Multi-city Search] Raw API Response:", response);
-
         if (response.status && response.data) {
-          const transformedResponse = {
+          setSearchResults({
             itineraries: response.data.itineraries || [],
             context: {
               status: response.status ? "complete" : "incomplete",
               totalResults: response.data.context?.totalResults || 0,
-              sessionId: response.sessionId, // Access sessionId from root level
+              sessionId: response.sessionId,
             },
             filterStats: response.data.filterStats || {
               carriers: [],
@@ -266,15 +260,8 @@ const FlightSearch = () => {
               duration: {},
               stopPrices: {},
             },
-          };
-
-          console.log(
-            "[Multi-city Search] Transformed Response:",
-            transformedResponse
-          );
-          setSearchResults(transformedResponse);
+          });
         } else {
-          console.log("[Multi-city Search] No valid results found");
           setSearchResults(null);
         }
       } else {
@@ -306,12 +293,8 @@ const FlightSearch = () => {
         }
       }
     } catch (error) {
-      console.error("Error searching flights:", error);
-      if (error.response) {
-        console.error("Error response:", error.response.data); // Debug log
-      }
-      alert("An error occurred while searching for flights. Please try again.");
       setSearchResults(null);
+      alert("An error occurred while searching for flights. Please try again.");
     } finally {
       setIsLoading(false);
     }
