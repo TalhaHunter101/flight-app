@@ -4,6 +4,7 @@ import AirportSearch from "./AirportSearch/AirportSearch";
 import PriceCalendar from "./Calendar/PriceCalendar";
 import FlightResults from "./FlightResults/FlightResults";
 import CalendarIcon from "./CalendarIcon";
+import LoadingSpinner from "./LoadingSpinner";
 
 const FlightSearch = () => {
   const [tripType, setTripType] = useState("round-trip");
@@ -31,6 +32,8 @@ const FlightSearch = () => {
   ]);
   const [isSelectingReturn, setIsSelectingReturn] = useState(false);
   const [searchResults, setSearchResults] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [sortBy, setSortBy] = useState("best");
 
   // Add useRef for dropdown click outside handling
   const dropdownRef = useRef(null);
@@ -168,13 +171,47 @@ const FlightSearch = () => {
     }
   };
 
-  const handleSearch = async () => {
-    if (!originAirportIds || !destinationAirportIds || !departureDate) {
-      alert("Please select origin, destination, and departure date.");
-      return;
+  const isFormValid = () => {
+    if (tripType === "multi-city") {
+      return multiCityFlights.every(
+        (flight) =>
+          flight.origin &&
+          flight.destination &&
+          flight.date &&
+          flight.originIds &&
+          flight.destinationIds
+      );
     }
 
+    const hasRequiredFields =
+      originAirportIds && destinationAirportIds && departureDate;
+
+    return tripType === "round-trip"
+      ? hasRequiredFields && returnDate
+      : hasRequiredFields;
+  };
+
+  const handleSearch = async (customSortBy = sortBy) => {
+    setIsLoading(true);
     try {
+      // Only allow these specific sort values
+      const validSortValues = [
+        "best",
+        "price_high",
+        "fastest",
+        "outbound_take_off_time",
+        "outbound_landing_time",
+        "return_take_off_time",
+        "return_landing_time",
+      ];
+
+      // Ensure we're using a valid sort value
+      const sortParam = validSortValues.includes(customSortBy)
+        ? customSortBy
+        : "best";
+
+      console.log("Making API call with sort param:", sortParam);
+
       const response = await searchFlightsComplete(
         originAirportIds.skyId,
         destinationAirportIds.skyId,
@@ -186,7 +223,7 @@ const FlightSearch = () => {
         adults,
         children,
         infants,
-        "best",
+        sortParam,
         10,
         undefined,
         "USD",
@@ -194,16 +231,29 @@ const FlightSearch = () => {
         "US"
       );
 
-      console.log("API response:", response.data);
-      if (response.data) {
+      console.log("API Response:", response);
+      console.log("Response Data:", response.data);
+
+      if (response.data && response.data.itineraries) {
         setSearchResults(response.data);
       } else {
-        setSearchResults([]);
+        console.log("No itineraries found in response");
+        setSearchResults(null);
       }
     } catch (error) {
       console.error("Error searching flights:", error);
       alert("An error occurred while searching for flights. Please try again.");
+      setSearchResults(null);
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleSortChange = (newSortBy) => {
+    const validSortBy = String(newSortBy).trim();
+    console.log("Handling sort change:", validSortBy); // Debug log
+    setSortBy(validSortBy);
+    handleSearch(validSortBy);
   };
 
   return (
@@ -522,20 +572,37 @@ const FlightSearch = () => {
           <div className="flex justify-center mt-6">
             <button
               onClick={handleSearch}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-8 py-3 rounded-full text-lg font-medium"
+              disabled={!isFormValid()}
+              className={`bg-blue-500 text-white px-8 py-3 rounded-full text-lg font-medium
+                ${
+                  isFormValid()
+                    ? "hover:bg-blue-600"
+                    : "opacity-50 cursor-not-allowed"
+                }`}
             >
-              Explore
+              {isLoading ? (
+                <LoadingSpinner size={24} color="#ffffff" />
+              ) : (
+                "Explore"
+              )}
             </button>
           </div>
         </div>
       </div>
 
       {/* Flight Results */}
-      {searchResults && (
-        <FlightResults
-          results={searchResults}
-          onSelectFlight={(flight) => console.log("Selected flight:", flight)}
-        />
+      {isLoading ? (
+        <div className="flex justify-center items-center mt-8">
+          <LoadingSpinner size={50} color="#3B82F6" />
+        </div>
+      ) : (
+        searchResults && (
+          <FlightResults
+            results={searchResults}
+            onSelectFlight={(flight) => console.log("Selected flight:", flight)}
+            onSortChange={handleSortChange}
+          />
+        )
       )}
     </div>
   );

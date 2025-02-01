@@ -239,26 +239,30 @@ const searchIncompleteFlights = async (
 // market: (Optional) Market code. Default is 'en-US'.
 // cabinClass: (Optional) The cabin class. Default is 'economy'. Options: 'economy', 'premium_economy', 'business', 'first'.
 // countryCode: (Optional) Country code. Default is 'US'.
-const getFlightDetails = async (
+const getFlightDetails = async ({
+  itineraryId,
   legs,
+  sessionId,
   adults = 1,
   currency = "USD",
   locale = "en-US",
   market = "en-US",
   cabinClass = "economy",
-  countryCode = "US"
-) => {
+  countryCode = "US",
+}) => {
   const options = {
     method: "GET",
     url: "https://sky-scrapper.p.rapidapi.com/api/v1/flights/getFlightDetails",
     params: {
+      itineraryId,
       legs: JSON.stringify(legs),
-      adults: adults,
-      currency: currency,
-      locale: locale,
-      market: market,
-      cabinClass: cabinClass,
-      countryCode: countryCode,
+      sessionId,
+      adults,
+      currency,
+      locale,
+      market,
+      cabinClass,
+      countryCode,
     },
     headers: {
       "x-rapidapi-key": process.env.REACT_APP_RAPIDAPI_KEY,
