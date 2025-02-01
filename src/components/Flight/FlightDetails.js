@@ -74,8 +74,11 @@ const FlightDetails = ({ flight, sessionId, onClose }) => {
                 </p>
                 <p className="text-sm">
                   Travel time:{" "}
-                  {Math.floor(details.legs[0].durationInMinutes / 60)} hr{" "}
-                  {details.legs[0].durationInMinutes % 60} min
+                  {details.legs[0].durationInMinutes
+                    ? `${Math.floor(
+                        details.legs[0].durationInMinutes / 60
+                      )} hr ${details.legs[0].durationInMinutes % 60} min`
+                    : "N/A"}
                 </p>
                 <p className="text-sm">
                   Flight: {details.legs[0].segments[0].marketingCarrier?.name} ·{" "}
@@ -106,8 +109,11 @@ const FlightDetails = ({ flight, sessionId, onClose }) => {
                   </p>
                   <p className="text-sm">
                     Travel time:{" "}
-                    {Math.floor(details.legs[1].durationInMinutes / 60)} hr{" "}
-                    {details.legs[1].durationInMinutes % 60} min
+                    {details.legs[1].durationInMinutes
+                      ? `${Math.floor(
+                          details.legs[1].durationInMinutes / 60
+                        )} hr ${details.legs[1].durationInMinutes % 60} min`
+                      : "N/A"}
                   </p>
                   <p className="text-sm">
                     Flight: {details.legs[1].segments[0].marketingCarrier?.name}{" "}
